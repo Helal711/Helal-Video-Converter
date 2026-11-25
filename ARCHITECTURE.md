@@ -30,15 +30,16 @@
 - `settings:load` / `settings:save` -> Persists desktop preferences under Electron `userData`.
 
 ## Running on Windows (Electron Desktop)
-1. Install desktop dependencies locally in VS Code / PowerShell:
+1. Install dependencies from `package-lock.json` in PowerShell / VS Code:
    ```bash
-   npm install
-   npm install -D electron electron-builder concurrently wait-on
+   npm ci
    ```
-2. Place Windows x64 `ffmpeg.exe` and `ffprobe.exe` in `electron/resources/bin/win32-x64/` (or install FFmpeg in Windows `PATH`, or configure paths in Settings). Review `electron/resources/FFMPEG_LICENSE.md` before redistribution.
-3. Compile Electron TypeScript and Vite renderer:
+2. Fetch Windows x64 `ffmpeg.exe` and `ffprobe.exe` into `electron/resources/bin/win32-x64/` (or install FFmpeg in Windows `PATH`, or configure paths in Settings). Review `electron/resources/FFMPEG_LICENSE.md` before redistribution:
    ```bash
-   npm run build
-   npx tsc -p tsconfig.electron.json
+   npm run fetch:ffmpeg:win
    ```
-4. Launch Electron pointing to `dist/index.html` (or Vite dev server via `VITE_DEV_SERVER_URL=http://localhost:3000 npx electron dist-electron/main.js`).
+3. Compile Vite renderer and Electron main/preload processes:
+   ```bash
+   npm run build:all
+   ```
+4. Launch Electron locally (`npx electron dist-electron/main.js`) or build Windows installers (`npm run dist:win` / `npm run dist:portable`).

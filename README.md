@@ -31,7 +31,7 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed IPC channel documentation.
 ### Install Dependencies
 
 ```bash
-npm install
+npm ci
 ```
 
 ### Run Web Preview (Vite)
