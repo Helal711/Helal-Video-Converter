@@ -39,12 +39,14 @@ jobs:
         run: node scripts/verify-win-binaries.mjs
 
       - name: Package NSIS Setup and Portable EXE
-        run: npx electron-builder --win nsis portable --x64
+        run: npx electron-builder --win nsis portable --x64 --publish never
 
       - name: Upload Windows Release Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Helal-Video-Converter-Windows-x64
+          name: Helal-Video-Converter-Windows-Installer
           path: |
             release/Helal-Video-Converter-Setup.exe
             release/Helal-Video-Converter-Portable.exe
+          retention-days: 14
+          if-no-files-found: error
