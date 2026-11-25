@@ -11,3 +11,5 @@ Thumbs.db
 !.env.example
 electron/resources/bin/win32-x64/*.exe
 electron/resources/bin/win32-x64/*.zip
+electron/resources/bin/win32-x64/_tmp_extract/
+electron/resources/bin/win32-x64/FFMPEG_*
