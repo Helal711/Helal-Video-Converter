@@ -1,0 +1,51 @@
+appId: com.helal.videoconverter
+productName: Helal Video Converter
+copyright: Copyright © 2026 Helal Video Converter
+
+directories:
+  output: release
+  buildResources: build
+
+asar: true
+
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - build/icon.ico
+  - package.json
+
+extraResources:
+  - from: electron/resources/bin/win32-x64
+    to: bin/win32-x64
+    filter:
+      - "**/*"
+      - "!README.txt"
+      - "!.gitkeep"
+  - from: electron/resources/FFMPEG_LICENSE.md
+    to: bin/FFMPEG_LICENSE.md
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+  icon: build/icon.ico
+  requestedExecutionLevel: asInvoker
+
+nsis:
+  artifactName: Helal-Video-Converter-Setup.exe
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Helal Video Converter
+  uninstallDisplayName: Helal Video Converter
+  deleteAppDataOnUninstall: false
+  menuCategory: true
+
+portable:
+  artifactName: Helal-Video-Converter-Portable.exe

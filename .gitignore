@@ -1,0 +1,13 @@
+node_modules/
+build-out/
+dist/
+dist-electron/
+release/
+coverage/
+.DS_Store
+Thumbs.db
+*.log
+.env*
+!.env.example
+electron/resources/bin/win32-x64/*.exe
+electron/resources/bin/win32-x64/*.zip

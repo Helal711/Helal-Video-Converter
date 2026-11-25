@@ -1,0 +1,6 @@
+{
+  "name": "Helal Video Converter",
+  "description": "Modular Windows desktop video and audio processing workstation built with React, TypeScript, Electron, FFmpeg, and FFprobe.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
