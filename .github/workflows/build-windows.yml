@@ -21,7 +21,13 @@ jobs:
           cache: "npm"
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --include=optional
+
+      - name: Verify Windows native bindings
+        run: npm run verify:win-bindings
+
+      - name: Typecheck
+        run: npm run lint
 
       - name: Fetch Windows x64 FFmpeg & FFprobe
         run: npm run fetch:ffmpeg:win

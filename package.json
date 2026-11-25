@@ -19,6 +19,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist dist-electron release server.js",
     "lint": "tsc --noEmit",
+    "verify:win-bindings": "node scripts/verify-win-bindings.mjs",
     "test:ffmpeg": "tsx tests/ffmpeg-integration.ts"
   },
   "dependencies": {
