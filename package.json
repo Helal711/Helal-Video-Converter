@@ -12,10 +12,11 @@
     "build": "vite build",
     "build:electron": "node scripts/build-electron.mjs",
     "build:all": "npm run build && npm run build:electron",
+    "generate:icon": "node scripts/generate-win-icon.mjs",
     "fetch:ffmpeg:win": "node scripts/fetch-win-ffmpeg.mjs",
-    "dist:win": "npm run build:all && node scripts/verify-win-binaries.mjs && electron-builder --win nsis --x64 --publish never",
-    "dist:portable": "npm run build:all && node scripts/verify-win-binaries.mjs && electron-builder --win portable --x64 --publish never",
-    "dist:win:all": "npm run build:all && node scripts/verify-win-binaries.mjs && electron-builder --win nsis portable --x64 --publish never",
+    "dist:win": "npm run generate:icon && npm run build:all && node scripts/verify-win-binaries.mjs && electron-builder --win nsis --x64 --publish never",
+    "dist:portable": "npm run generate:icon && npm run build:all && node scripts/verify-win-binaries.mjs && electron-builder --win portable --x64 --publish never",
+    "dist:win:all": "npm run generate:icon && npm run build:all && node scripts/verify-win-binaries.mjs && electron-builder --win nsis portable --x64 --publish never",
     "preview": "vite preview",
     "clean": "rm -rf dist dist-electron release server.js",
     "lint": "tsc --noEmit",
@@ -23,22 +24,16 @@
     "test:ffmpeg": "tsx tests/ffmpeg-integration.ts"
   },
   "dependencies": {
-    "@google/genai": "^2.4.0",
-    "@tailwindcss/vite": "^4.3.3",
-    "@vitejs/plugin-react": "^6.1.1",
     "lucide-react": "^0.546.0",
     "react": "^19.0.1",
-    "react-dom": "^19.0.1",
-    "vite": "^8.3.0",
-    "express": "^4.21.2",
-    "dotenv": "^17.2.3",
-    "motion": "^12.23.24"
+    "react-dom": "^19.0.1"
   },
   "devDependencies": {
-    "@types/express": "^4.17.21",
+    "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^22.14.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
     "autoprefixer": "^10.4.21",
     "electron": "^45.5.0",
     "electron-builder": "^26.18.0",
@@ -46,6 +41,7 @@
     "extract-zip": "^2.0.1",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0"
   }
 }

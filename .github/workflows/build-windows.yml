@@ -29,6 +29,12 @@ jobs:
       - name: Typecheck
         run: npm run lint
 
+      - name: Audit production dependencies
+        run: npm audit --omit=dev
+
+      - name: Generate Windows app icon
+        run: npm run generate:icon
+
       - name: Fetch Windows x64 FFmpeg & FFprobe
         run: npm run fetch:ffmpeg:win
 

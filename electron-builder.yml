@@ -14,6 +14,7 @@ files:
   - dist-electron/**/*
   - build/icon.ico
   - package.json
+  - "!node_modules/**/*"
 
 extraResources:
   - from: electron/resources/bin/win32-x64

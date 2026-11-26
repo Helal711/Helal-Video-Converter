@@ -1,4 +1,5 @@
-import { createWriteStream, existsSync, promises as fs } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { createReadStream, createWriteStream, existsSync, promises as fs } from 'node:fs';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -6,10 +7,47 @@ import extract from 'extract-zip';
 
 const FFMPEG_ZIP_URL =
   'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip';
+const FFMPEG_SHA256_URL =
+  'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip.sha256';
 
 const targetDir = path.resolve(process.cwd(), 'electron', 'resources', 'bin', 'win32-x64');
 const tempDir = path.join(targetDir, '_tmp_extract');
 const zipPath = path.join(targetDir, 'ffmpeg-release-essentials.zip');
+
+async function computeSha256(filePath) {
+  const hash = createHash('sha256');
+  await new Promise((resolve, reject) => {
+    const stream = createReadStream(filePath);
+    stream.on('data', (chunk) => hash.update(chunk));
+    stream.on('error', reject);
+    stream.on('end', resolve);
+  });
+  return hash.digest('hex').toLowerCase();
+}
+
+async function fetchExpectedSha256(url) {
+  let response;
+  try {
+    response = await fetch(url, { redirect: 'follow' });
+  } catch (err) {
+    throw new Error(
+      `Failed to fetch FFmpeg SHA-256 checksum from ${url}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+  if (!response.ok) {
+    throw new Error(
+      `Failed to download FFmpeg SHA-256 checksum from ${url}: HTTP ${response.status} ${response.statusText}`,
+    );
+  }
+  const body = (await response.text()).trim();
+  const match = body.match(/^[a-fA-F0-9]{64}/);
+  if (!match) {
+    throw new Error(`Unexpected SHA-256 checksum payload from ${url}: "${body.slice(0, 120)}"`);
+  }
+  return match[0].toLowerCase();
+}
 
 async function downloadFile(url, dest) {
   console.log(`[fetch:ffmpeg:win] Downloading ${url} ...`);
@@ -51,14 +89,32 @@ async function downloadFile(url, dest) {
   }
 }
 
+async function verifyPeExecutable(filePath) {
+  const lstat = await fs.lstat(filePath);
+  if (!lstat.isFile() || lstat.isSymbolicLink() || lstat.size < 1024 * 1024) {
+    throw new Error(`Invalid binary file or unexpected symlink at "${filePath}".`);
+  }
+  const handle = await fs.open(filePath, 'r');
+  try {
+    const header = Buffer.alloc(2);
+    await handle.read(header, 0, 2, 0);
+    if (header[0] !== 0x4d || header[1] !== 0x5a) {
+      throw new Error(`"${filePath}" is not a valid Windows PE executable (missing MZ header).`);
+    }
+  } finally {
+    await handle.close();
+  }
+}
+
 async function findFileRecursive(dir, filename) {
   const entries = await fs.readdir(dir, { withFileTypes: true });
   for (const entry of entries) {
+    if (entry.isSymbolicLink()) continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       const found = await findFileRecursive(full, filename);
       if (found) return found;
-    } else if (entry.name.toLowerCase() === filename.toLowerCase()) {
+    } else if (entry.isFile() && entry.name.toLowerCase() === filename.toLowerCase()) {
       return full;
     }
   }
@@ -69,10 +125,11 @@ async function findLicenseFilesRecursive(dir) {
   const matches = [];
   const entries = await fs.readdir(dir, { withFileTypes: true });
   for (const entry of entries) {
+    if (entry.isSymbolicLink()) continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       matches.push(...(await findLicenseFilesRecursive(full)));
-    } else {
+    } else if (entry.isFile()) {
       const lower = entry.name.toLowerCase();
       if (
         lower === 'license' ||
@@ -86,6 +143,23 @@ async function findLicenseFilesRecursive(dir) {
   return matches;
 }
 
+function validateZipEntrySafety(entry) {
+  const name = entry.fileName;
+  if (!name || name.includes('\0') || path.isAbsolute(name) || /^[a-zA-Z]:/.test(name)) {
+    throw new Error(`Unsafe ZIP entry path rejected: "${name}"`);
+  }
+  const normalized = path.posix.normalize(name.replace(/\\/g, '/'));
+  if (normalized === '..' || normalized.startsWith('../')) {
+    throw new Error(`ZIP path traversal entry rejected: "${name}"`);
+  }
+  const mode = (entry.externalFileAttributes >>> 16) & 0xffff;
+  const IFMT = 0o170000;
+  const IFLNK = 0o120000;
+  if ((mode & IFMT) === IFLNK) {
+    throw new Error(`ZIP symlink entry rejected for security: "${name}"`);
+  }
+}
+
 async function main() {
   await fs.mkdir(targetDir, { recursive: true });
 
@@ -93,30 +167,38 @@ async function main() {
   const ffprobeOut = path.join(targetDir, 'ffprobe.exe');
 
   if (existsSync(ffmpegOut) && existsSync(ffprobeOut)) {
-    const [ffmpegStat, ffprobeStat] = await Promise.all([
-      fs.stat(ffmpegOut).catch(() => null),
-      fs.stat(ffprobeOut).catch(() => null),
-    ]);
-    if (
-      ffmpegStat &&
-      ffprobeStat &&
-      ffmpegStat.size > 1024 * 1024 &&
-      ffprobeStat.size > 1024 * 1024
-    ) {
-      console.log('[fetch:ffmpeg:win] ffmpeg.exe and ffprobe.exe already present.');
+    try {
+      await Promise.all([verifyPeExecutable(ffmpegOut), verifyPeExecutable(ffprobeOut)]);
+      console.log('[fetch:ffmpeg:win] Verified ffmpeg.exe and ffprobe.exe already present.');
       return;
+    } catch {
+      // Re-download if existing file is invalid
     }
   }
 
   try {
-    await downloadFile(FFMPEG_ZIP_URL, zipPath);
+    const [expectedSha256] = await Promise.all([
+      fetchExpectedSha256(FFMPEG_SHA256_URL),
+      downloadFile(FFMPEG_ZIP_URL, zipPath),
+    ]);
+
+    const actualSha256 = await computeSha256(zipPath);
+    if (actualSha256 !== expectedSha256) {
+      throw new Error(
+        `FFmpeg ZIP SHA-256 mismatch! Expected ${expectedSha256}, got ${actualSha256}`,
+      );
+    }
+    console.log(`[fetch:ffmpeg:win] Verified archive SHA-256: ${actualSha256}`);
 
     await fs.rm(tempDir, { recursive: true, force: true });
     await fs.mkdir(tempDir, { recursive: true });
 
-    console.log('[fetch:ffmpeg:win] Extracting archive using extract-zip ...');
+    console.log('[fetch:ffmpeg:win] Extracting archive using extract-zip (symlink-guarded) ...');
     try {
-      await extract(zipPath, { dir: tempDir });
+      await extract(zipPath, {
+        dir: tempDir,
+        onEntry: (entry) => validateZipEntrySafety(entry),
+      });
     } catch (err) {
       throw new Error(
         `Failed to extract FFmpeg ZIP archive "${zipPath}" into "${tempDir}": ${
@@ -137,6 +219,8 @@ async function main() {
     await fs.copyFile(ffmpegSrc, ffmpegOut);
     await fs.copyFile(ffprobeSrc, ffprobeOut);
 
+    await Promise.all([verifyPeExecutable(ffmpegOut), verifyPeExecutable(ffprobeOut)]);
+
     const licenseFiles = await findLicenseFilesRecursive(tempDir);
     if (licenseFiles.length > 0) {
       await fs.copyFile(
@@ -149,18 +233,14 @@ async function main() {
       }
     }
 
-    const [ffmpegFinal, ffprobeFinal] = await Promise.all([
-      fs.stat(ffmpegOut),
-      fs.stat(ffprobeOut),
+    const [ffmpegSha, ffprobeSha] = await Promise.all([
+      computeSha256(ffmpegOut),
+      computeSha256(ffprobeOut),
     ]);
 
-    if (ffmpegFinal.size < 1024 * 1024 || ffprobeFinal.size < 1024 * 1024) {
-      throw new Error(
-        'Copied FFmpeg executables failed size verification after extraction.',
-      );
-    }
-
-    console.log('[fetch:ffmpeg:win] Bundled Windows x64 binaries ready in:', targetDir);
+    console.log('[fetch:ffmpeg:win] Bundled Windows x64 binaries verified in:', targetDir);
+    console.log(`[fetch:ffmpeg:win] ffmpeg.exe  SHA-256: ${ffmpegSha}`);
+    console.log(`[fetch:ffmpeg:win] ffprobe.exe SHA-256: ${ffprobeSha}`);
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
     await fs.rm(zipPath, { force: true }).catch(() => undefined);
